@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#151515">
+  <meta name="description" content="외대부고 학생을 위한 비공식 공부 타이머·학교 일과·시간표 대시보드">
+  <title>HAFS FOCUS — Study OS</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <script defer src="./app.js"></script>
+</head>
+<body>
+  <div id="app-shell">
+    <nav class="sidebar" aria-label="메인 메뉴">
+      <div class="logo"><span class="mark">H</span> HAFS FOCUS<small>STUDY OS / STUDENT EDITION</small></div>
+      <button class="nav-btn selected" type="button" data-tab="home"><span class="nicon">▦</span>HOME</button>
+      <button class="nav-btn" type="button" data-tab="timer"><span class="nicon">◷</span>STUDY LAB</button>
+      <button class="nav-btn" type="button" data-tab="schedule"><span class="nicon">▤</span>SCHEDULE</button>
+      <button class="nav-btn" type="button" data-tab="planner"><span class="nicon">☑</span>PLANNER</button>
+      <button class="nav-btn" type="button" data-tab="analytics"><span class="nicon">▥</span>ANALYTICS</button>
+      <button class="nav-btn" type="button" data-tab="settings"><span class="nicon">⚙</span>SETTINGS</button>
+      <div class="sidebar-footer">LOCAL FIRST · PRIVATE BY DEFAULT<br>비공식 학생 프로젝트 / 학교와 무관<br><span id="sidebar-profile">프로필 미설정</span></div>
+    </nav>
+    <main class="layout">
+      <header class="top">
+        <div><div class="eyebrow" id="eyebrow">YOUR STUDY SPACE / 01</div><h1 class="pagetitle" id="pagetitle">HOME</h1></div>
+        <div class="topright"><button class="pill profile-pill" id="quick-profile" type="button" title="설정 열기">학년·계열</button><span class="pill" id="headerdate">--</span></div>
+      </header>
+      <div id="app-notice" class="notice hide" role="status" aria-live="polite"></div>
+      <section class="page active" id="home" aria-label="홈">
+        <div class="grid cols-4 metrics">
+          <article class="card"><h3>TODAY'S SELF STUDY <span>자습만</span></h3><div class="metric" id="home-study">0h 00m</div><div class="metric-label">학교 수업 자동 포함 안 함</div></article>
+          <article class="card"><h3>ACTIVE TIMER <span>LIVE</span></h3><div class="metric clockmetric" id="home-clock">00:00:00</div><div class="metric-label" id="home-active">측정 중인 세션 없음</div></article>
+          <article class="card"><h3>NEXT HAFS EVENT <span>DAILY</span></h3><div class="metric eventmetric" id="home-next">—</div><div class="metric-label" id="home-next-time">현재 일과 확인 중</div></article>
+          <article class="card"><h3>OPEN TASKS <span>PLANNER</span></h3><div class="metric" id="home-tasks">0</div><div class="metric-label">완료되지 않은 할 일</div></article>
+        </div>
+        <div class="section"><h2>YOUR HAFS DAY</h2><small id="home-schedule-label">학년별 일과</small></div>
+        <div class="grid cols-2">
+          <article class="card"><h3>NOW / NEXT <span>학교 일과</span></h3><div id="home-now-box" class="now-box"></div><button class="btn sm" type="button" data-go="schedule">시간표 자세히 보기</button></article>
+          <article class="card"><h3>QUICK START <span>공부 시작</span></h3><p class="quiet">현재 설정된 과목의 공부 타이머를 바로 시작할 수 있어요.</p><div class="time-big" id="home-timer-time">00:00:00</div><p class="quiet" id="home-timer-subject">선택 과목: 수학</p><button class="btn primary" type="button" data-go="timer">STUDY LAB 열기</button></article>
+        </div>
+        <div class="section"><h2>RECENT STUDY</h2><small>최근 기록</small></div>
+        <article class="card" id="home-recent"></article>
+      </section>
+      <section class="page" id="timer" aria-label="공부 타이머">
+        <div class="grid cols-2">
+          <article class="card"><h3>FOCUS TIMER <span>과목별 스톱워치</span></h3>
+            <div class="formrow"><div class="field"><label for="subject-select">과목</label><select id="subject-select"></select></div><div class="field"><label for="type-select">공부 유형</label><select id="type-select"><option>자습</option><option>인강</option><option>숙제</option><option>복습</option><option>기타</option></select></div></div>
+            <div class="timerbox"><div class="mini" id="timer-state">READY TO FOCUS</div><div class="bigclock" id="timer-display">00:00:00</div><div class="quiet" id="timer-description">과목을 선택한 다음 시작하세요.</div></div>
+            <div class="stack"><button class="btn primary" id="timer-start" type="button">START</button><button class="btn" id="timer-pause" type="button" disabled>PAUSE</button><button class="btn" id="timer-finish" type="button" disabled>FINISH & SAVE</button></div>
+            <p class="hint">측정 중 새로고침해도 시작 시각을 유지합니다. 일시정지 시간은 공부 시간에 포함하지 않아요.</p>
+          </article>
+          <article class="card"><h3>TODAY BY SUBJECT <span>시간 합계</span></h3><div id="timer-breakdown"></div><div class="divider"></div><h3>RECENT SESSIONS</h3><div id="timer-sessions"></div></article>
+        </div>
+      </section>
+      <section class="page" id="schedule" aria-label="학교 일과와 시간표">
+        <div class="grid cols-2 schedule-grid">
+          <article class="card"><h3>HAFS DAILY SCHEDULE <span id="schedule-label">학년 기본 일과</span></h3><p class="quiet">GMC 공식 안내를 기준으로 한 기본 일과입니다. ET, 시험 및 행사에 따른 변경은 학교 공지를 확인하세요.</p><div id="schedule-list" class="schedule-list"></div><p class="hint">출처: <a href="https://hafs.hs.kr/?act=doc&amp;mcode=1516" target="_blank" rel="noopener noreferrer">HAFS 공식 GMC 일과표</a></p></article>
+          <article class="card"><h3>MY WEEKLY TIMETABLE <span id="timetable-label">선택 프로필</span></h3><p class="quiet">실제 수업 과목은 학급·선택과목에 따라 달라질 수 있어 직접 입력하도록 했습니다. 학년·계열별로 각각 저장됩니다.</p><div class="tablewrap"><table class="list-table timetable"><thead><tr><th>교시</th><th>월</th><th>화</th><th>수</th><th>목</th><th>금</th></tr></thead><tbody id="timetable-body"></tbody></table></div><div class="stack form-actions"><button class="btn sm" id="timetable-reset" type="button">현재 프로필 시간표 비우기</button><button class="btn sm" type="button" data-go="settings">학년·계열 바꾸기</button></div></article>
+        </div>
+      </section>
+      <section class="page" id="planner" aria-label="할 일">
+        <article class="card"><h3>STUDY PLANNER <span>할 일 / 마감일</span></h3><form id="task-form" class="task-form"><div class="field"><label for="task-title">할 일</label><input id="task-title" required maxlength="100" placeholder="과제, 수행평가, 복습..."></div><div class="field"><label for="task-date">마감일</label><input id="task-date" type="date" required></div><button class="btn primary" type="submit">ADD TASK</button></form><div id="task-list"></div></article>
+      </section>
+      <section class="page" id="analytics" aria-label="공부 통계">
+        <div class="grid cols-2"><article class="card"><h3>LAST 7 DAYS <span>실제 공부 기록</span></h3><div id="weekly-chart" class="weekly-chart" role="img" aria-label="최근 7일 공부 시간"></div></article><article class="card"><h3>TODAY'S SUBJECTS <span>과목별 합계</span></h3><div id="analytics-breakdown"></div></article></div>
+        <div class="section"><h2>SESSION HISTORY</h2><small>최근 50개</small></div><article class="card" id="history-list"></article>
+      </section>
+      <section class="page" id="settings" aria-label="설정">
+        <div class="grid cols-2">
+          <article class="card"><h3>STUDENT PROFILE <span>언제든 변경 가능</span></h3><p class="quiet">학년·계열을 바꾸면 기본 일과와 주간 시간표가 즉시 전환됩니다. 다른 프로필의 시간표나 기존 공부 기록은 삭제되지 않습니다.</p>
+            <form id="profile-form"><div class="formrow"><div class="field"><label for="settings-grade">학년</label><select id="settings-grade"><option value="1">1학년</option><option value="2">2학년</option><option value="3">3학년</option></select></div><div class="field"><label for="settings-track">계열</label><select id="settings-track"><option value="natural">자연과학과정</option><option value="humanities">인문사회과정</option><option value="international">국제과정</option></select></div></div><button class="btn primary" type="submit">SAVE PROFILE</button></form><p class="hint">계열별 실제 수업 과목은 자동 생성하지 않습니다. 시간표 화면에서 직접 입력하세요.</p>
+          </article>
+          <article class="card"><h3>YOUR DATA <span>이 기기에 저장</span></h3><p class="quiet">회원가입이나 서버 전송 없이 브라우저에 저장됩니다. 다른 기기에서 사용하려면 백업 파일을 가져오세요.</p><div class="stack"><button class="btn" id="backup-export" type="button">JSON 백업 내보내기</button><button class="btn" id="backup-import" type="button">백업 불러오기</button><input id="backup-file" type="file" accept=".json,application/json" hidden><button class="btn danger" id="data-erase" type="button">기록 초기화</button></div>
+            <div class="divider"></div><h3>INSTALL AS APP</h3><p class="quiet">지원되는 브라우저에서는 사이트를 홈 화면이나 데스크톱 앱으로 추가할 수 있습니다.</p><button class="btn sm" id="install-app" type="button" hidden>앱으로 설치</button><p class="hint">iPhone: 브라우저 공유 메뉴 → 홈 화면에 추가. 설치 기능은 HTTPS 환경에서 사용하세요.</p>
+          </article>
+        </div>
+      </section>
+      <footer class="footer">HAFS FOCUS · Independent student project · Not affiliated with HAFS · KST</footer>
+    </main>
+  </div>
+  <div class="setup-overlay" id="setup-overlay" role="dialog" aria-modal="true" aria-labelledby="setup-title" hidden>
+    <div class="setup-dialog"><div class="setup-brand">◼ HAFS FOCUS <span>FIRST-TIME SETUP</span></div><h2 id="setup-title">나에게 맞는 HAFS를 설정하세요.</h2><p class="quiet">학년별 학교 일과와 계열별 개인 시간표가 자동으로 연결됩니다. 설정에서 언제든 바꿀 수 있어요.</p>
+      <form id="setup-form"><fieldset><legend>01 / 학년</legend><div class="choice-grid three"><label class="choice"><input type="radio" name="grade" value="1" checked><span>1학년</span></label><label class="choice"><input type="radio" name="grade" value="2"><span>2학년</span></label><label class="choice"><input type="radio" name="grade" value="3"><span>3학년</span></label></div></fieldset><fieldset><legend>02 / 계열</legend><div class="choice-grid"><label class="choice"><input type="radio" name="track" value="natural" checked><span>자연과학과정</span></label><label class="choice"><input type="radio" name="track" value="humanities"><span>인문사회과정</span></label><label class="choice"><input type="radio" name="track" value="international"><span>국제과정</span></label></div></fieldset><p class="hint">실제 과목 배치는 학급마다 다를 수 있어 시간표에서 직접 작성합니다.</p><button class="btn primary setup-continue" type="submit">START HAFS FOCUS →</button></form>
+    </div>
+  </div>
+</body>
+</html>
