@@ -135,6 +135,58 @@ if(typeof document!=='undefined'){
   function getTodaySlots(){const p=kst();const row=p.weekday>=1&&p.weekday<=5?currentTable()[p.weekday-1]:[];return dailySlots(state.profile.grade,p.weekday,row);}
   function renderSchedule(){if(!state.profile)return;const p=kst(),now=p.hour*60+p.minute,rows=getTodaySlots();const active=rows.find(([start,end,_,type])=>type!=='marker'&&timeMin(start)<=now&&timeMin(end)>now);const next=rows.find(([start,_,__,type])=>timeMin(start)>now&&type!=='marker');const target=$('schedule-list');target.replaceChildren();for(const [start,end,title,type] of rows){const row=document.createElement('div');row.className=`schedule-item ${active&&active[0]===start&&active[2]===title?'current':''} ${timeMin(end)<now?'past':''}`;const time=document.createElement('div');time.className='schedule-time';time.textContent=type==='marker'?start:`${start}–${end}`;const name=document.createElement('div');name.className='schedule-name';name.textContent=title;row.append(time,name);target.append(row);}const label=`${profileText()} · ${p.weekday===0||p.weekday===6?'주말':'평일'}`;$('schedule-label').textContent=label;$('home-schedule-label').textContent=label;$('timetable-label').textContent=profileText();$('home-next').textContent=next?.[2]||'일과 종료';$('home-next-time').textContent=next?`${next[0]} 시작`:'오늘 남은 공식 일정 없음';const box=$('home-now-box');box.replaceChildren();const title=document.createElement('div');title.className='now-title';title.textContent=active?.[2]||'기본 일과 사이 휴식';const meta=document.createElement('div');meta.className='now-meta';meta.textContent=next?`다음: ${next[0]} · ${next[2]}`:'오늘의 주요 일정 종료';box.append(title,meta);}
   function renderTimetable(){if(!state.profile)return;const t=currentTable(),body=$('timetable-body');body.replaceChildren();for(let period=0;period<8;period++){const tr=document.createElement('tr');const th=document.createElement('th');th.scope='row';th.textContent=`${period+1}교시`;tr.append(th);for(let day=0;day<5;day++){const td=document.createElement('td');const input=document.createElement('input');input.maxLength=30;input.value=t[day][period];input.placeholder='—';input.setAttribute('aria-label',`${WEEKDAYS[day+1]}요일 ${period+1}교시 과목`);input.addEventListener('input',()=>{t[day][period]=input.value.slice(0,30);save();if(kst().weekday===day+1)renderSchedule();});td.append(input);tr.append(td);}body.append(tr);}}
+  function refreshSubjectUI(){
+    renderSubjects();renderSubjectOptions();renderClock();renderStudy();renderSchedule();
+  }
+  function renderSubjects(){
+    const target=$('subjects-list');if(!target)return;target.replaceChildren();
+    for(const subject of state.subjects){
+      const row=document.createElement('div');row.className='subject-row'+(subject.archived?' is-archived':'');
+      const info=document.createElement('div');info.className='subject-info';
+      const name=document.createElement('strong');name.textContent=subject.name;
+      const meta=document.createElement('small');meta.textContent=subject.archived?'보관됨 · 기존 학습 기록 유지':'타이머·통계에 사용';
+      info.append(name,meta);
+      const actions=document.createElement('div');actions.className='subject-actions';
+      const edit=document.createElement('button');edit.type='button';edit.className='btn sm';edit.textContent='이름 수정';
+      edit.disabled=subject.archived;
+      edit.addEventListener('click',()=>{
+        const input=document.createElement('input');input.type='text';input.className='subject-rename-input';
+        input.value=subject.name;input.maxLength=30;input.setAttribute('aria-label','과목 이름 수정');
+        const saveBtn=document.createElement('button');saveBtn.type='button';saveBtn.className='btn primary sm';saveBtn.textContent='저장';
+        const cancel=document.createElement('button');cancel.type='button';cancel.className='btn sm';cancel.textContent='취소';
+        info.replaceChildren(input);actions.replaceChildren(saveBtn,cancel);input.focus();input.select();
+        const saveEdit=()=>{
+          const next=input.value.trim(),before=subject.name;
+          if(!next){notify('과목 이름을 입력하세요.');return;}
+          if(state.subjects.some(x=>x.id!==subject.id&&x.name.toLowerCase()===next.toLowerCase())){notify('같은 이름의 과목이 이미 있습니다.');return;}
+          if(next!==before){
+            let matches=0;
+            for(const table of Object.values(state.timetables))for(const day of table)for(const cell of day)if(cell===before)matches++;
+            if(matches&&confirm('시간표의 '+matches+'개 셀에도 변경된 과목 이름을 반영할까요?')){
+              for(const table of Object.values(state.timetables))for(const day of table)for(let i=0;i<day.length;i++)if(day[i]===before)day[i]=next;
+              renderTimetable();
+            }
+            subject.name=next;save();
+          }
+          refreshSubjectUI();
+        };
+        saveBtn.addEventListener('click',saveEdit);
+        input.addEventListener('keydown',e=>{if(e.key==='Enter')saveEdit();if(e.key==='Escape')refreshSubjectUI();});
+        cancel.addEventListener('click',refreshSubjectUI);
+      });
+      const toggle=document.createElement('button');toggle.type='button';toggle.className='btn sm';
+      toggle.textContent=subject.archived?'복원':'보관';
+      toggle.addEventListener('click',()=>{
+        if(!subject.archived&&state.active?.subject===subject.id){notify('타이머 측정 중인 과목은 보관할 수 없습니다.');return;}
+        if(!subject.archived&&availableSubjects().length===1){notify('최소 한 개의 사용 가능한 과목을 남겨야 합니다.');return;}
+        subject.archived=!subject.archived;
+        if(subject.archived&&state.selectedSubject===subject.id)state.selectedSubject=availableSubjects()[0].id;
+        save();refreshSubjectUI();
+      });
+      actions.append(edit,toggle);row.append(info,actions);target.append(row);
+    }
+    const count=$('subjects-count');if(count)count.textContent=availableSubjects().length+'개 사용 중 / '+state.subjects.length+'개 전체';
+  }
   function renderAll(){if(!state.profile){showSetup();return;}clearNotice();renderProfile();renderSubjectOptions();renderSubjects();renderClock();renderStudy();renderSchedule();renderTimetable();renderTasks();if(!$('task-date').value)$('task-date').value=dayKey();}
   function timerStart(){if(state.active)return;const now=Date.now();state.active={subject:state.selectedSubject,type:state.selectedType,startedAt:now,intervals:[],segmentStart:now};save();renderClock();renderStudy();}
   function timerTogglePause(){const a=state.active;if(!a)return;const now=Date.now();if(a.segmentStart!=null){a.intervals.push([a.segmentStart,now]);a.segmentStart=null;}else a.segmentStart=now;save();renderClock();renderStudy();}
@@ -144,6 +196,16 @@ if(typeof document!=='undefined'){
   $('quick-profile').addEventListener('click',()=>openTab('settings'));
   $('setup-form').addEventListener('submit',e=>{e.preventDefault();const f=new FormData(e.currentTarget);setupProfile(String(f.get('grade')),String(f.get('track')));});
   $('profile-form').addEventListener('submit',e=>{e.preventDefault();setupProfile($('settings-grade').value,$('settings-track').value);notify('프로필을 저장했어요. 기존 시간표와 기록은 그대로 유지됩니다.');});
+  $('subject-add-form').addEventListener('submit',e=>{
+    e.preventDefault();const input=$('new-subject-name'),name=input.value.trim();
+    if(!name){notify('과목 이름을 입력하세요.');return;}
+    if(state.subjects.length>=200){notify('과목은 최대 200개까지 등록할 수 있습니다.');return;}
+    if(state.subjects.some(x=>x.name.toLowerCase()===name.toLowerCase())){notify('이미 등록된 과목 이름입니다.');return;}
+    const id='subject-'+safeId();state.subjects.push({id,name,archived:false});
+    state.selectedSubject=id;input.value='';save();refreshSubjectUI();
+    notify(name+' 과목을 추가했습니다.');
+  });
+  $('manage-subjects').addEventListener('click',()=>{openTab('settings');$('subject-manager').scrollIntoView({block:'start',behavior:'smooth'});});
   $('subject-select').addEventListener('change',e=>{state.selectedSubject=e.target.value;save();renderClock();});
   $('type-select').addEventListener('change',e=>{state.selectedType=e.target.value;save();});
   $('timer-start').addEventListener('click',timerStart);
