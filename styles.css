@@ -9,3 +9,134 @@
 @media(max-width:700px){.sidebar{inset:0 0 auto 0;width:100%;height:63px;flex-direction:row;align-items:center;padding:6px 10px;overflow-x:auto}.logo{font-size:14px;min-width:max-content;padding:4px 12px 4px 3px}.logo small{display:none}.nav-btn{font-size:0;padding:10px;min-width:39px;width:auto;justify-content:center}.nicon{font-size:18px}.sidebar-footer{display:none}.layout{margin-left:0;padding:83px 13px 35px}.pagetitle{font-size:25px}.cols-2{grid-template-columns:1fr}.topright{display:flex;flex-direction:column;align-items:flex-end}.pill{font-size:10px}.card{padding:15px}.formrow{grid-template-columns:1fr}.task-form{grid-template-columns:1fr}.task-form button{grid-column:auto}.bigclock{font-size:43px}.setup-dialog{padding:22px}.setup-dialog h2{font-size:22px}}
 @media(max-width:440px){.cols-4{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.metrics .card{padding:14px 12px}.metric{font-size:24px}.clockmetric{font-size:20px}.eventmetric{font-size:17px}.metric-label{font-size:10px}.top{align-items:flex-start}.setup-brand span{float:none;display:block;margin-top:4px}.choice span{font-size:12px}.stack .btn{font-size:12px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
+/* Study OS redesign — see DESIGN.md. Additive overrides preserve existing component hooks. */
+:root{
+  --ink:#171717;--ink2:#414141;--muted:#6b6b6b;--line:#e5e5e5;
+  --bg:#f5f5f4;--white:#fff;--dark:#171717;--r:14px;
+  --space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;
+  --space-6:24px;--space-8:32px;
+  --success:#287452;--focus:#525252;
+}
+html,body{font-family:'Pretendard Variable',Pretendard,Inter,'Noto Sans KR',system-ui,-apple-system,sans-serif}
+body{line-height:1.5}
+button,input,select{touch-action:manipulation}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
+.btn{min-height:44px;transition:background-color .15s,border-color .15s}
+.btn.sm{min-height:38px}
+.card{padding:24px;border-color:var(--line);box-shadow:0 2px 9px rgba(0,0,0,.018)}
+.card h3{letter-spacing:.3px}
+.layout{max-width:1500px;margin-right:auto}
+.nav-label{font-size:12px}
+.sidebar .nav-btn{min-height:45px}
+.sidebar .nav-btn.selected{box-shadow:inset 3px 0 #222}
+.field input,.field select{min-height:44px}
+.eyebrow{letter-spacing:1.4px}
+.home-intro{display:flex;justify-content:space-between;align-items:end;gap:16px;margin-bottom:18px}
+.home-intro h2{margin:4px 0;font-size:25px;letter-spacing:-.9px}
+.home-intro p{margin:0}
+.home-intro .eyebrow{font-size:10px}
+.home-intro>.quiet{white-space:nowrap}
+.home-priority{grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:16px}
+.home-priority .card{min-height:260px;display:flex;flex-direction:column;align-items:stretch}
+.home-day .now-box{margin:12px 0 16px;min-height:55px}
+.home-day .now-title{font-size:clamp(22px,2.5vw,32px)}
+.home-day .home-next-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;border-top:1px solid var(--line);padding:14px 0;margin-top:auto}
+.home-next-row strong{font-size:15px}
+.home-next-row .quiet{margin-left:auto;font-size:12px}
+.home-day>.btn{align-self:flex-start}
+.home-focus{background:#1b1b1b;color:white}
+.home-focus h3 span,.home-focus .mini,.home-focus .quiet{color:#c2c2c2}
+.home-focus-clock{font-weight:800;letter-spacing:-2px;font-size:clamp(37px,4vw,56px);font-variant-numeric:tabular-nums;margin:16px 0 2px}
+.home-focus .focus-action{margin-top:auto;background:#fff;border-color:#fff;color:#171717;display:flex;justify-content:space-between;align-items:center;width:100%}
+.home-focus .focus-action:hover{background:#eee}
+.home-stats{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:16px}
+.home-stats .card{min-height:144px}
+.home-bottom{margin-top:16px}
+.card-heading{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:12px}
+.card-heading h3{margin-bottom:0}
+.text-link{color:var(--ink2);background:transparent;border:0;font-weight:700;font-size:12px;padding:8px 0;white-space:nowrap}
+.text-link:hover{text-decoration:underline}
+.preview-task{display:flex;align-items:center;gap:11px;border-bottom:1px solid var(--line);min-height:49px;font-size:13px}
+.preview-task:last-child{border:0}
+.preview-task-dot{width:13px;height:13px;border:1.5px solid #555;border-radius:50%;flex:none}
+.preview-task span:nth-child(2){min-width:0;flex:1;overflow-wrap:anywhere}
+.preview-task small{font-size:11px;color:var(--muted);white-space:nowrap}
+.timer-subject-heading{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px}
+.timerbox{padding:42px 16px;margin:18px 0}
+.timer-active-subject{font-size:15px;color:#333;font-weight:750;margin-top:10px}
+.timer-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.timer-controls .btn{min-height:49px}
+#timer-state{color:#565656}
+.bigclock{font-size:clamp(44px,4.5vw,64px);font-variant-numeric:tabular-nums;letter-spacing:-2px}
+.subject-manager{grid-column:1/-1;scroll-margin-top:36px}
+.subject-add-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;margin:20px 0 10px}
+.subject-add-form input,.subject-rename-input,.task-inline-input,.task-inline-date{border:1px solid #d5d5d5;background:#fafafa;border-radius:8px;padding:10px 12px;min-width:0;min-height:44px;font:inherit}
+.subject-add-form input{width:100%}
+.subject-list{border-top:1px solid var(--line);margin-top:16px}
+.subject-row{padding:13px 0;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line)}
+.subject-info{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1}
+.subject-info strong{font-size:13px;overflow-wrap:anywhere}
+.subject-info small{font-size:11px;color:var(--muted)}
+.subject-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.subject-row.is-archived .subject-info strong{color:#777}
+.subject-rename-input{width:100%}
+.weekday-switch{display:none}
+.timetable td.current-period{background:#ececec}
+.timetable td.current-period input{border-color:#737373;background:white}
+.task-actions{display:flex;align-items:center;gap:4px}
+.task-edit{background:transparent;border:1px solid transparent;color:#666;padding:10px 6px;border-radius:6px;font-size:12px;min-height:38px}
+.task-edit:hover,.task-delete:hover{color:#111;background:#f2f2f2}
+.task-delete{min-width:38px;min-height:38px}
+.task-body .task-inline-input,.task-body .task-inline-date{display:block;width:100%;margin-bottom:6px}
+.task input[type=checkbox]{width:20px;height:20px;flex:none}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+@media(max-width:1100px){
+  .home-priority{grid-template-columns:1fr 1fr}
+  .home-stats{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:700px){
+  .sidebar{position:fixed;inset:auto 0 0 0;height:auto;min-height:66px;padding:5px max(4px,env(safe-area-inset-right)) calc(5px + env(safe-area-inset-bottom)) max(4px,env(safe-area-inset-left));align-items:stretch;justify-content:space-around;background:#171717;overflow-x:visible;gap:0;box-shadow:0 -2px 15px #0002}
+  .sidebar .logo,.sidebar .sidebar-footer{display:none}
+  .sidebar .nav-btn{display:flex;flex:1;min-width:0;min-height:54px;max-width:none;flex-direction:column;gap:1px;border-radius:8px;padding:6px 1px;margin:0;text-align:center;justify-content:center;font-size:initial;color:#c1c1c1}
+  .sidebar .nav-btn.selected{background:#393939;color:#fff;box-shadow:none}
+  .sidebar .nicon{font-size:18px;line-height:20px}
+  .sidebar .nav-label{font-size:10px;font-weight:700;line-height:14px}
+  .layout{margin-left:0;padding:22px 13px calc(94px + env(safe-area-inset-bottom))}
+  .home-intro{align-items:flex-start;flex-direction:column;gap:4px}
+  .home-intro h2{font-size:22px}
+  .home-priority{grid-template-columns:1fr;gap:12px}
+  .home-priority .card{min-height:auto}
+  .home-focus-clock{font-size:46px}
+  .home-focus .focus-action{margin-top:22px}
+  .home-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:12px}
+  .home-stats .card:last-child{grid-column:1/-1}
+  .home-stats .card{min-height:118px;padding:16px}
+  .home-bottom{margin-top:12px}
+  .card{padding:18px}
+  .weekday-switch{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px;margin:18px 0}
+  .weekday-btn{min-height:44px;border:1px solid var(--line);border-radius:8px;background:#f8f8f8;color:#555;font-weight:750}
+  .weekday-btn.selected{background:#171717;color:#fff;border-color:#171717}
+  .timetable .mobile-hidden{display:none}
+  .timetable th:first-child{width:68px}
+  .timetable td{width:calc(100% - 68px)}
+  .timetable input{max-width:none;min-width:0;width:100%;min-height:44px;font-size:13px}
+  .tablewrap{overflow:visible}
+  .subject-manager{scroll-margin-top:20px}
+  .timer-controls{grid-template-columns:1fr 1fr}
+  .timer-controls #timer-finish{grid-column:1/-1}
+}
+@media(max-width:440px){
+  .topright .pill{white-space:nowrap}
+  .nav-label{font-size:9px}
+  .home-focus-clock{font-size:39px}
+  .subject-row{align-items:flex-start}
+  .subject-actions .btn{font-size:11px;padding:7px 8px}
+  .subject-add-form{grid-template-columns:1fr}
+  .subject-add-form .btn{width:100%}
+  .timerbox{padding:30px 8px}
+  .bigclock{font-size:clamp(35px,10vw,48px)}
+  .home-next-row .quiet{margin-left:0}
+}
+@media(prefers-reduced-motion:reduce){
+  .btn{transition:none}
+}
