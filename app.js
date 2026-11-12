@@ -7,6 +7,7 @@ const GRADES = ['1','2','3'];
 const TRACKS = { natural:'자연과학과정', humanities:'인문사회과정', international:'국제과정' };
 const SUBJECTS = ['국어','영어','수학','사회','과학','한국사','일본어','수행','기타'];
 const TYPES = ['자습','인강','숙제','복습','기타'];
+const subjectDefaults = () => SUBJECTS.map(name => ({id:name,name,archived:false}));
 const WEEKDAYS = ['일','월','화','수','목','금','토'];
 const PERIODS = [['09:05','09:55'],['10:05','10:55'],['11:05','11:55'],['12:05','12:55'],['14:00','14:50'],['15:00','15:50'],['16:00','16:50']];
 const pad = n => String(n).padStart(2,'0');
@@ -22,29 +23,48 @@ function emptyTable(){return Array.from({length:5},()=>Array(8).fill(''));}
 function cleanTable(value){return Array.isArray(value)&&value.length===5&&value.every(a=>Array.isArray(a)&&a.length===8)?value.map(a=>a.map(x=>typeof x==='string'?x.slice(0,30):'')):emptyTable();}
 function profileKey(profile){return `${profile.grade}:${profile.track}`;}
 function validProfile(p){return p&&GRADES.includes(String(p.grade))&&Object.hasOwn(TRACKS,p.track);}
-function freshState(){return {version:2,profile:null,timetables:{},selectedSubject:'수학',selectedType:'자습',active:null,sessions:[],tasks:[]};}
+function freshState(){return {version:2,profile:null,timetables:{},subjects:subjectDefaults(),selectedSubject:'수학',selectedType:'자습',active:null,sessions:[],tasks:[]};}
 function normalizeState(raw){
-  const s=freshState(); if(!raw||typeof raw!=='object') return s;
+  const s=freshState(); if(!raw||typeof raw!=='object')return s;
   if(validProfile(raw.profile))s.profile={grade:String(raw.profile.grade),track:raw.profile.track};
-  if(SUBJECTS.includes(raw.selectedSubject))s.selectedSubject=raw.selectedSubject;
+  // Optional v2 extension: IDs are stable references, while visible names can change.
+  // Keep the original storage key and JSON backup envelope backward compatible.
+  if(Array.isArray(raw.subjects)){
+    const ids=new Set(),names=new Set(),catalog=[];
+    for(const x of raw.subjects.slice(0,200)){
+      if(!x||typeof x.id!=='string'||typeof x.name!=='string')continue;
+      const id=x.id.trim(),name=x.name.trim();
+      if(!id||id.length>80||!name||name.length>30||ids.has(id)||names.has(name.toLowerCase()))continue;
+      ids.add(id);names.add(name.toLowerCase());catalog.push({id,name,archived:!!x.archived});
+    }
+    if(catalog.length)s.subjects=catalog;
+  }
+  const known=new Set(s.subjects.map(x=>x.id));
+  const preserveSubject=id=>{
+    if(typeof id!=='string'||!id.trim()||id.length>80)return false;
+    if(!known.has(id)){s.subjects.push({id,name:id.slice(0,30),archived:true});known.add(id);}
+    return true;
+  };
+  if(typeof raw.selectedSubject==='string'&&preserveSubject(raw.selectedSubject))s.selectedSubject=raw.selectedSubject;
   if(TYPES.includes(raw.selectedType))s.selectedType=raw.selectedType;
   if(raw.timetables&&typeof raw.timetables==='object'){
-    for(const g of GRADES)for(const track of Object.keys(TRACKS)){const key=`${g}:${track}`;if(Object.hasOwn(raw.timetables,key))s.timetables[key]=cleanTable(raw.timetables[key]);}
+    for(const g of GRADES)for(const track of Object.keys(TRACKS)){const key=g+':'+track;if(Object.hasOwn(raw.timetables,key))s.timetables[key]=cleanTable(raw.timetables[key]);}
   }
-  // Legacy local prototype had only grade, one timetable, and an unpaused timer.
   if(raw.version!==2){
     if(!s.profile&&GRADES.includes(String(raw.grade)))s.migrationGrade=String(raw.grade);
     if(raw.timetable)s.legacyTable=cleanTable(raw.timetable);
   }
-  if(Array.isArray(raw.sessions))s.sessions=raw.sessions.filter(x=>x&&SUBJECTS.includes(x.subject)&&Number.isFinite(x.startedAt)&&Number.isFinite(x.endedAt)&&x.endedAt>=x.startedAt&&x.endedAt<Date.now()+60000).slice(-10000).map(x=>({subject:x.subject,type:TYPES.includes(x.type)?x.type:'자습',startedAt:x.startedAt,endedAt:x.endedAt,intervals:Array.isArray(x.intervals)?x.intervals.filter(i=>Array.isArray(i)&&i.length===2&&Number.isFinite(i[0])&&Number.isFinite(i[1])&&i[1]>=i[0]&&i[0]>=x.startedAt&&i[1]<=x.endedAt):[[x.startedAt,x.endedAt]]}));
+  if(Array.isArray(raw.sessions))s.sessions=raw.sessions.filter(x=>x&&Number.isFinite(x.startedAt)&&Number.isFinite(x.endedAt)&&x.endedAt>=x.startedAt&&x.endedAt<Date.now()+60000&&preserveSubject(x.subject)).slice(-10000).map(x=>({subject:x.subject,type:TYPES.includes(x.type)?x.type:'자습',startedAt:x.startedAt,endedAt:x.endedAt,intervals:Array.isArray(x.intervals)?x.intervals.filter(i=>Array.isArray(i)&&i.length===2&&Number.isFinite(i[0])&&Number.isFinite(i[1])&&i[1]>=i[0]&&i[0]>=x.startedAt&&i[1]<=x.endedAt):[[x.startedAt,x.endedAt]]}));
   if(Array.isArray(raw.tasks))s.tasks=raw.tasks.filter(x=>x&&typeof x.id==='string'&&typeof x.title==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(x.due)).slice(-1500).map(x=>({id:x.id,title:x.title.slice(0,100),due:x.due,done:!!x.done}));
-  if(raw.active&&SUBJECTS.includes(raw.active.subject)&&Number.isFinite(raw.active.startedAt)&&raw.active.startedAt<=Date.now()){
-    const a=raw.active, intervals=Array.isArray(a.intervals)?a.intervals.filter(i=>Array.isArray(i)&&i.length===2&&i[1]>=i[0]&&i[0]>=a.startedAt):[];
+  if(raw.active&&Number.isFinite(raw.active.startedAt)&&raw.active.startedAt<=Date.now()&&preserveSubject(raw.active.subject)){
+    const a=raw.active,intervals=Array.isArray(a.intervals)?a.intervals.filter(i=>Array.isArray(i)&&i.length===2&&Number.isFinite(i[0])&&Number.isFinite(i[1])&&i[1]>=i[0]&&i[0]>=a.startedAt):[];
     const segmentStart=Number.isFinite(a.segmentStart)&&a.segmentStart>=a.startedAt&&a.segmentStart<=Date.now()?a.segmentStart:null;
     s.active={subject:a.subject,type:TYPES.includes(a.type)?a.type:'자습',startedAt:a.startedAt,intervals,segmentStart};
-  }else if(raw.activeSession&&SUBJECTS.includes(raw.activeSession.subject)&&Number.isFinite(raw.activeSession.startedAt)&&raw.activeSession.startedAt<=Date.now()){
+  }else if(raw.activeSession&&Number.isFinite(raw.activeSession.startedAt)&&raw.activeSession.startedAt<=Date.now()&&preserveSubject(raw.activeSession.subject)){
     s.active={subject:raw.activeSession.subject,type:'자습',startedAt:raw.activeSession.startedAt,intervals:[],segmentStart:raw.activeSession.startedAt};
   }
+  if(!s.subjects.some(x=>!x.archived))s.subjects[0].archived=false;
+  if(!s.subjects.some(x=>x.id===s.selectedSubject&&!x.archived))s.selectedSubject=s.subjects.find(x=>!x.archived).id;
   return s;
 }
 function overlap(a,b,start,end){return Math.max(0,Math.min(b,end)-Math.max(a,start));}
@@ -53,8 +73,8 @@ function sessionIntervals(s,now=Date.now()){
   return s.segmentStart!=null?[...ranges,[s.segmentStart,now]]:ranges;
 }
 function activeElapsed(s,now=Date.now()){return s?sessionIntervals(s,now).reduce((sum,[a,b])=>sum+Math.max(0,b-a),0):0;}
-function totalsInDay(sessions,active,start,now=Date.now()){
-  const totals=Object.fromEntries(SUBJECTS.map(x=>[x,0]));
+function totalsInDay(sessions,active,start,now=Date.now(),subjects=SUBJECTS){
+  const totals=Object.fromEntries(subjects.map(x=>[typeof x==='string'?x:x.id,0]));
   for(const s of sessions){if(!Object.hasOwn(totals,s.subject))continue;const ranges=s.intervals?.length?s.intervals:[[s.startedAt,s.endedAt]];for(const [a,b] of ranges)totals[s.subject]+=overlap(a,b,start,start+DAY_MS);}
   if(active&&Object.hasOwn(totals,active.subject))for(const [a,b] of sessionIntervals(active,now))totals[active.subject]+=overlap(a,b,start,start+DAY_MS);
   return totals;
@@ -88,7 +108,9 @@ function safeId(){return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 if(typeof document!=='undefined'){
   let state;
   try{const raw=localStorage.getItem(STORAGE_KEY)||localStorage.getItem(LEGACY_KEY);state=normalizeState(raw?JSON.parse(raw):null);}catch{state=freshState();}
-  let currentTab='home',lastDay='',lastMinute='',installPrompt=null;
+  let currentTab='home',lastDay='',lastMinute='',installPrompt=null,timetableDay=Math.max(0,Math.min(4,kst().weekday-1));
+  const subjectName=id=>state.subjects.find(x=>x.id===id)?.name||id;
+  const availableSubjects=()=>state.subjects.filter(x=>!x.archived);
   function save(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));return true;}catch{notify('브라우저 저장에 실패했습니다. 저장 공간이나 비공개 모드를 확인하세요.');return false;}}
   function notify(msg){const n=$('app-notice');n.textContent=msg;n.classList.remove('hide');}
   function clearNotice(){$('app-notice').classList.add('hide');}
@@ -103,17 +125,131 @@ if(typeof document!=='undefined'){
   function openTab(tab){if(!$(tab)||!$(tab).classList.contains('page'))return;currentTab=tab;document.querySelectorAll('.nav-btn').forEach(btn=>{const yes=btn.dataset.tab===tab;btn.classList.toggle('selected',yes);btn.setAttribute('aria-current',yes?'page':'false');});document.querySelectorAll('.page').forEach(el=>el.classList.toggle('active',el.id===tab));$('pagetitle').textContent=tab==='timer'?'STUDY LAB':tab.toUpperCase();$('eyebrow').textContent=`HAFS FOCUS / ${String(['home','timer','schedule','planner','analytics','settings'].indexOf(tab)+1).padStart(2,'0')}`;window.scrollTo?.({top:0,behavior:'instant'});}
   function profileText(){return `${state.profile.grade}학년 · ${TRACKS[state.profile.track]}`;}
   function renderProfile(){if(!state.profile)return;$('quick-profile').textContent=profileText();$('sidebar-profile').textContent=profileText();$('settings-grade').value=state.profile.grade;$('settings-track').value=state.profile.track;}
-  function renderClock(){const now=Date.now(),p=kst(now);$('headerdate').textContent=`${p.month}.${pad(p.day)} ${WEEKDAYS[p.weekday]} ${pad(p.hour)}:${pad(p.minute)}`;const a=state.active,elapsed=activeElapsed(a,now);$('timer-display').textContent=duration(elapsed);$('home-clock').textContent=duration(elapsed);$('home-timer-time').textContent=duration(elapsed);$('home-active').textContent=a?`${a.subject} · ${a.segmentStart==null?'일시정지':'측정 중'}`:'측정 중인 세션 없음';$('home-timer-subject').textContent=`선택 과목: ${a?.subject||state.selectedSubject}`;$('timer-state').textContent=!a?'READY TO FOCUS':a.segmentStart==null?'PAUSED':'FOCUSING';$('timer-description').textContent=!a?'과목을 선택한 다음 시작하세요.':a.segmentStart==null?'일시정지 중 · 재개하면 이어서 기록됩니다.':'창을 닫거나 새로고침해도 기록됩니다.';$('timer-start').disabled=!!a;$('timer-pause').disabled=!a;$('timer-finish').disabled=!a;$('timer-pause').textContent=a&&a.segmentStart==null?'RESUME':'PAUSE';$('subject-select').disabled=!!a;$('type-select').disabled=!!a;}
-  function renderSubjectOptions(){const s=$('subject-select');s.replaceChildren();SUBJECTS.forEach(x=>{const el=document.createElement('option');el.value=x;el.textContent=x;s.append(el);});s.value=state.selectedSubject;$('type-select').value=state.selectedType;}
-  function todayStats(){const t=totalsInDay(state.sessions,state.active,dayStart());return {bySubject:t,total:Object.values(t).reduce((a,b)=>a+b,0)};}
-  function appendBreakdown(id,totals){const target=$(id);target.replaceChildren();const items=Object.entries(totals).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);if(!items.length){const e=document.createElement('div');e.className='empty';e.textContent='아직 공부 기록이 없습니다.';target.append(e);return;}const peak=items[0][1];for(const [name,ms] of items){const row=document.createElement('div');row.className='bar-row';const label=document.createElement('span');label.className='bar-label';label.textContent=name;const rail=document.createElement('div');rail.className='bar-rail';const fill=document.createElement('div');fill.className='bar-fill';fill.style.width=`${100*ms/peak}%`;rail.append(fill);const val=document.createElement('strong');val.className='bar-val';val.textContent=durationShort(ms);row.append(label,rail,val);target.append(row);}}
-  function buildSessions(id,limit){const target=$(id);target.replaceChildren();const rows=[...state.sessions].sort((a,b)=>b.startedAt-a.startedAt).slice(0,limit);if(!rows.length){const el=document.createElement('div');el.className='empty';el.textContent='아직 저장된 공부 세션이 없습니다.';target.append(el);return;}for(const s of rows){const row=document.createElement('div');row.className='session';const info=document.createElement('div');const title=document.createElement('div');title.className='session-title';title.textContent=`${s.subject} · ${s.type}`;const desc=document.createElement('div');desc.className='session-desc';desc.textContent=`${dayKey(s.startedAt)} ${hhmm(s.startedAt)} – ${hhmm(s.endedAt)}`;info.append(title,desc);const time=document.createElement('div');time.className='session-time';time.textContent=duration(activeElapsed({...s,segmentStart:null}));row.append(info,time);target.append(row);}}
-  function renderStudy(){const stats=todayStats();$('home-study').textContent=durationShort(stats.total);appendBreakdown('timer-breakdown',stats.bySubject);appendBreakdown('analytics-breakdown',stats.bySubject);buildSessions('timer-sessions',6);buildSessions('history-list',50);buildSessions('home-recent',3);const date0=dayStart(),now=Date.now();const data=[];for(let d=6;d>=0;d--){const start=date0-d*DAY_MS;const ms=Object.values(totalsInDay(state.sessions,state.active,start,now)).reduce((a,b)=>a+b,0);data.push({label:WEEKDAYS[kst(start+12*3600000).weekday],ms,today:d===0});}const max=Math.max(3600000,...data.map(x=>x.ms));const chart=$('weekly-chart');chart.replaceChildren();chart.setAttribute('aria-label',data.map(x=>`${x.label}요일 ${durationShort(x.ms)}`).join(', '));for(const x of data){const col=document.createElement('div');col.className=`day-column ${x.today?'today':''}`;const val=document.createElement('div');val.className='day-value';val.textContent=x.ms?(x.ms/3600000).toFixed(1)+'h':'0h';const track=document.createElement('div');track.className='day-track';const fill=document.createElement('div');fill.className='day-fill';fill.style.height=`${100*x.ms/max}%`;track.append(fill);const label=document.createElement('div');label.className='day-label';label.textContent=x.label;col.append(val,track,label);chart.append(col);}}
-  function renderTasks(){const target=$('task-list');target.replaceChildren();$('home-tasks').textContent=state.tasks.filter(t=>!t.done).length;const rows=[...state.tasks].sort((a,b)=>Number(a.done)-Number(b.done)||a.due.localeCompare(b.due));if(!rows.length){const e=document.createElement('div');e.className='empty';e.textContent='할 일을 추가하면 여기에 표시됩니다.';target.append(e);return;}for(const t of rows){const row=document.createElement('div');row.className=`task ${t.done?'done':''}`;const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=t.done;checkbox.setAttribute('aria-label',`${t.title} 완료 표시`);checkbox.addEventListener('change',()=>{t.done=checkbox.checked;save();renderTasks();});const info=document.createElement('div');info.className='task-body';const title=document.createElement('div');title.className='task-title';title.textContent=t.title;const due=document.createElement('div');due.className='task-due';due.textContent=`마감 ${t.due}`;info.append(title,due);const del=document.createElement('button');del.className='task-delete';del.type='button';del.textContent='✕';del.setAttribute('aria-label',`${t.title} 삭제`);del.addEventListener('click',()=>{state.tasks=state.tasks.filter(x=>x.id!==t.id);save();renderTasks();});row.append(checkbox,info,del);target.append(row);}}
+  function renderClock(){const now=Date.now(),p=kst(now);$('headerdate').textContent=`${p.month}.${pad(p.day)} ${WEEKDAYS[p.weekday]} ${pad(p.hour)}:${pad(p.minute)}`;const a=state.active,elapsed=activeElapsed(a,now);$('timer-display').textContent=duration(elapsed);$('home-clock').textContent=duration(elapsed);$('home-timer-time').textContent=duration(elapsed);$('home-active').textContent=a?`${subjectName(a.subject)} · ${a.segmentStart==null?'일시정지':'측정 중'}`:'측정 중인 세션 없음';$('home-timer-subject').textContent=`선택 과목: ${subjectName(a?.subject||state.selectedSubject)}`;$('timer-state').textContent=!a?'READY TO FOCUS':a.segmentStart==null?'PAUSED':'FOCUSING';$('timer-active-subject').textContent=subjectName(a?.subject||state.selectedSubject)+' · '+(a?.type||state.selectedType);$('timerbox-status')?.setAttribute('data-status',!a?'ready':a.segmentStart==null?'paused':'running');$('timer-description').textContent=!a?'과목을 선택한 다음 시작하세요.':a.segmentStart==null?'일시정지 중 · 재개하면 이어서 기록됩니다.':'창을 닫거나 새로고침해도 기록됩니다.';$('timer-start').disabled=!!a;$('timer-pause').disabled=!a;$('timer-finish').disabled=!a;$('timer-pause').textContent=a&&a.segmentStart==null?'재개':'일시정지';$('subject-select').disabled=!!a;$('type-select').disabled=!!a;}
+  function renderSubjectOptions(){const s=$('subject-select');s.replaceChildren();for(const x of availableSubjects()){const el=document.createElement('option');el.value=x.id;el.textContent=x.name;s.append(el);}s.value=state.selectedSubject;$('type-select').value=state.selectedType;}
+  function todayStats(){const t=totalsInDay(state.sessions,state.active,dayStart(),Date.now(),state.subjects);return {bySubject:t,total:Object.values(t).reduce((a,b)=>a+b,0)};}
+  function appendBreakdown(id,totals){const target=$(id);target.replaceChildren();const items=Object.entries(totals).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);if(!items.length){const e=document.createElement('div');e.className='empty';e.textContent='아직 공부 기록이 없습니다.';target.append(e);return;}const peak=items[0][1];for(const [name,ms] of items){const row=document.createElement('div');row.className='bar-row';const label=document.createElement('span');label.className='bar-label';label.textContent=subjectName(name);const rail=document.createElement('div');rail.className='bar-rail';const fill=document.createElement('div');fill.className='bar-fill';fill.style.width=`${100*ms/peak}%`;rail.append(fill);const val=document.createElement('strong');val.className='bar-val';val.textContent=durationShort(ms);row.append(label,rail,val);target.append(row);}}
+  function buildSessions(id,limit){const target=$(id);target.replaceChildren();const rows=[...state.sessions].sort((a,b)=>b.startedAt-a.startedAt).slice(0,limit);if(!rows.length){const el=document.createElement('div');el.className='empty';el.textContent='아직 저장된 공부 세션이 없습니다.';target.append(el);return;}for(const s of rows){const row=document.createElement('div');row.className='session';const info=document.createElement('div');const title=document.createElement('div');title.className='session-title';title.textContent=`${subjectName(s.subject)} · ${s.type}`;const desc=document.createElement('div');desc.className='session-desc';desc.textContent=`${dayKey(s.startedAt)} ${hhmm(s.startedAt)} – ${hhmm(s.endedAt)}`;info.append(title,desc);const time=document.createElement('div');time.className='session-time';time.textContent=duration(activeElapsed({...s,segmentStart:null}));row.append(info,time);target.append(row);}}
+  function renderStudy(){const stats=todayStats();$('home-study').textContent=durationShort(stats.total);appendBreakdown('timer-breakdown',stats.bySubject);appendBreakdown('analytics-breakdown',stats.bySubject);buildSessions('timer-sessions',6);buildSessions('history-list',50);buildSessions('home-recent',3);const date0=dayStart(),now=Date.now();const data=[];for(let d=6;d>=0;d--){const start=date0-d*DAY_MS;const ms=Object.values(totalsInDay(state.sessions,state.active,start,now,state.subjects)).reduce((a,b)=>a+b,0);data.push({label:WEEKDAYS[kst(start+12*3600000).weekday],ms,today:d===0});}const max=Math.max(3600000,...data.map(x=>x.ms));const chart=$('weekly-chart');chart.replaceChildren();chart.setAttribute('aria-label',data.map(x=>`${x.label}요일 ${durationShort(x.ms)}`).join(', '));for(const x of data){const col=document.createElement('div');col.className=`day-column ${x.today?'today':''}`;const val=document.createElement('div');val.className='day-value';val.textContent=x.ms?(x.ms/3600000).toFixed(1)+'h':'0h';const track=document.createElement('div');track.className='day-track';const fill=document.createElement('div');fill.className='day-fill';fill.style.height=`${100*x.ms/max}%`;track.append(fill);const label=document.createElement('div');label.className='day-label';label.textContent=x.label;col.append(val,track,label);chart.append(col);}}
+  function renderTasks(){
+    const target=$('task-list');target.replaceChildren();
+    const pending=state.tasks.filter(t=>!t.done);
+    $('home-tasks').textContent=pending.length;
+    const rows=[...state.tasks].sort((a,b)=>Number(a.done)-Number(b.done)||a.due.localeCompare(b.due));
+    if(!rows.length){const e=document.createElement('div');e.className='empty';e.textContent='할 일을 추가하면 여기에 표시됩니다.';target.append(e);}
+    for(const t of rows){
+      const row=document.createElement('div');row.className='task'+(t.done?' done':'');
+      const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=t.done;
+      checkbox.setAttribute('aria-label',t.title+' 완료 표시');
+      checkbox.addEventListener('change',()=>{t.done=checkbox.checked;save();renderTasks();});
+      const info=document.createElement('div');info.className='task-body';
+      const title=document.createElement('div');title.className='task-title';title.textContent=t.title;
+      const due=document.createElement('div');due.className='task-due';due.textContent='마감 '+t.due;
+      info.append(title,due);
+      const actions=document.createElement('div');actions.className='task-actions';
+      const edit=document.createElement('button');edit.type='button';edit.className='task-edit';edit.textContent='수정';edit.setAttribute('aria-label',t.title+' 수정');
+      edit.addEventListener('click',()=>{
+        const field=document.createElement('input');field.className='task-inline-input';field.value=t.title;field.maxLength=100;
+        const date=document.createElement('input');date.type='date';date.value=t.due;date.className='task-inline-date';
+        const saveBtn=document.createElement('button');saveBtn.type='button';saveBtn.className='btn sm primary';saveBtn.textContent='저장';
+        const cancel=document.createElement('button');cancel.type='button';cancel.className='btn sm';cancel.textContent='취소';
+        info.replaceChildren(field,date);actions.replaceChildren(saveBtn,cancel);field.focus();
+        const commit=()=>{if(!field.value.trim()||!/^\d{4}-\d{2}-\d{2}$/.test(date.value)){notify('할 일 제목과 마감일을 확인하세요.');return;}t.title=field.value.trim();t.due=date.value;save();renderTasks();};
+        saveBtn.addEventListener('click',commit);cancel.addEventListener('click',renderTasks);
+        field.addEventListener('keydown',e=>{if(e.key==='Enter')commit();if(e.key==='Escape')renderTasks();});
+      });
+      const del=document.createElement('button');del.className='task-delete';del.type='button';del.textContent='✕';
+      del.setAttribute('aria-label',t.title+' 삭제');
+      del.addEventListener('click',()=>{state.tasks=state.tasks.filter(x=>x.id!==t.id);save();renderTasks();});
+      actions.append(edit,del);row.append(checkbox,info,actions);target.append(row);
+    }
+    const preview=$('home-task-preview');preview.replaceChildren();
+    const top=pending.sort((a,b)=>a.due.localeCompare(b.due)).slice(0,3);
+    if(!top.length){const e=document.createElement('div');e.className='empty';e.textContent='현재 남은 할 일이 없습니다.';preview.append(e);}
+    for(const t of top){const line=document.createElement('div');line.className='preview-task';const dot=document.createElement('span');dot.className='preview-task-dot';dot.setAttribute('aria-hidden','true');const label=document.createElement('span');label.textContent=t.title;const due=document.createElement('small');due.textContent=t.due;line.append(dot,label,due);preview.append(line);}
+  }
   function getTodaySlots(){const p=kst();const row=p.weekday>=1&&p.weekday<=5?currentTable()[p.weekday-1]:[];return dailySlots(state.profile.grade,p.weekday,row);}
   function renderSchedule(){if(!state.profile)return;const p=kst(),now=p.hour*60+p.minute,rows=getTodaySlots();const active=rows.find(([start,end,_,type])=>type!=='marker'&&timeMin(start)<=now&&timeMin(end)>now);const next=rows.find(([start,_,__,type])=>timeMin(start)>now&&type!=='marker');const target=$('schedule-list');target.replaceChildren();for(const [start,end,title,type] of rows){const row=document.createElement('div');row.className=`schedule-item ${active&&active[0]===start&&active[2]===title?'current':''} ${timeMin(end)<now?'past':''}`;const time=document.createElement('div');time.className='schedule-time';time.textContent=type==='marker'?start:`${start}–${end}`;const name=document.createElement('div');name.className='schedule-name';name.textContent=title;row.append(time,name);target.append(row);}const label=`${profileText()} · ${p.weekday===0||p.weekday===6?'주말':'평일'}`;$('schedule-label').textContent=label;$('home-schedule-label').textContent=label;$('timetable-label').textContent=profileText();$('home-next').textContent=next?.[2]||'일과 종료';$('home-next-time').textContent=next?`${next[0]} 시작`:'오늘 남은 공식 일정 없음';const box=$('home-now-box');box.replaceChildren();const title=document.createElement('div');title.className='now-title';title.textContent=active?.[2]||'기본 일과 사이 휴식';const meta=document.createElement('div');meta.className='now-meta';meta.textContent=next?`다음: ${next[0]} · ${next[2]}`:'오늘의 주요 일정 종료';box.append(title,meta);}
-  function renderTimetable(){if(!state.profile)return;const t=currentTable(),body=$('timetable-body');body.replaceChildren();for(let period=0;period<8;period++){const tr=document.createElement('tr');const th=document.createElement('th');th.scope='row';th.textContent=`${period+1}교시`;tr.append(th);for(let day=0;day<5;day++){const td=document.createElement('td');const input=document.createElement('input');input.maxLength=30;input.value=t[day][period];input.placeholder='—';input.setAttribute('aria-label',`${WEEKDAYS[day+1]}요일 ${period+1}교시 과목`);input.addEventListener('input',()=>{t[day][period]=input.value.slice(0,30);save();if(kst().weekday===day+1)renderSchedule();});td.append(input);tr.append(td);}body.append(tr);}}
-  function renderAll(){if(!state.profile){showSetup();return;}clearNotice();renderProfile();renderSubjectOptions();renderClock();renderStudy();renderSchedule();renderTimetable();renderTasks();if(!$('task-date').value)$('task-date').value=dayKey();}
+  function renderTimetable(){
+    if(!state.profile)return;
+    const t=currentTable(),body=$('timetable-body');body.replaceChildren();
+    const switcher=$('timetable-day-switch');switcher.replaceChildren();
+    for(let day=0;day<5;day++){
+      const button=document.createElement('button');button.type='button';button.className='weekday-btn'+(day===timetableDay?' selected':'');
+      button.textContent=WEEKDAYS[day+1];button.setAttribute('aria-pressed',day===timetableDay?'true':'false');
+      button.addEventListener('click',()=>{timetableDay=day;renderTimetable();});switcher.append(button);
+    }
+    const heading=document.querySelectorAll('.timetable thead th');
+    for(let day=0;day<5;day++)heading[day+1]?.classList.toggle('mobile-hidden',day!==timetableDay);
+    const p=kst(),now=p.hour*60+p.minute;
+    for(let period=0;period<8;period++){
+      const tr=document.createElement('tr');
+      const th=document.createElement('th');th.scope='row';th.textContent=(period+1)+'교시';tr.append(th);
+      for(let day=0;day<5;day++){
+        const td=document.createElement('td');td.classList.toggle('mobile-hidden',day!==timetableDay);
+        const times=period===7?(day===0?['17:00','17:50']:['16:50','17:40']):PERIODS[period];
+        if(p.weekday===day+1&&timeMin(times[0])<=now&&now<timeMin(times[1]))td.classList.add('current-period');
+        const input=document.createElement('input');input.maxLength=30;input.value=t[day][period];
+        input.placeholder='과목 입력';input.setAttribute('aria-label',WEEKDAYS[day+1]+'요일 '+(period+1)+'교시 과목');
+        input.addEventListener('input',()=>{t[day][period]=input.value.slice(0,30);save();if(kst().weekday===day+1)renderSchedule();});
+        td.append(input);tr.append(td);
+      }
+      body.append(tr);
+    }
+  }
+  function refreshSubjectUI(){
+    renderSubjects();renderSubjectOptions();renderClock();renderStudy();renderSchedule();
+  }
+  function renderSubjects(){
+    const target=$('subjects-list');if(!target)return;target.replaceChildren();
+    for(const subject of state.subjects){
+      const row=document.createElement('div');row.className='subject-row'+(subject.archived?' is-archived':'');
+      const info=document.createElement('div');info.className='subject-info';
+      const name=document.createElement('strong');name.textContent=subject.name;
+      const meta=document.createElement('small');meta.textContent=subject.archived?'보관됨 · 기존 학습 기록 유지':'타이머·통계에 사용';
+      info.append(name,meta);
+      const actions=document.createElement('div');actions.className='subject-actions';
+      const edit=document.createElement('button');edit.type='button';edit.className='btn sm';edit.textContent='이름 수정';
+      edit.disabled=subject.archived;
+      edit.addEventListener('click',()=>{
+        const input=document.createElement('input');input.type='text';input.className='subject-rename-input';
+        input.value=subject.name;input.maxLength=30;input.setAttribute('aria-label','과목 이름 수정');
+        const saveBtn=document.createElement('button');saveBtn.type='button';saveBtn.className='btn primary sm';saveBtn.textContent='저장';
+        const cancel=document.createElement('button');cancel.type='button';cancel.className='btn sm';cancel.textContent='취소';
+        info.replaceChildren(input);actions.replaceChildren(saveBtn,cancel);input.focus();input.select();
+        const saveEdit=()=>{
+          const next=input.value.trim(),before=subject.name;
+          if(!next){notify('과목 이름을 입력하세요.');return;}
+          if(state.subjects.some(x=>x.id!==subject.id&&x.name.toLowerCase()===next.toLowerCase())){notify('같은 이름의 과목이 이미 있습니다.');return;}
+          if(next!==before){
+            let matches=0;
+            for(const table of Object.values(state.timetables))for(const day of table)for(const cell of day)if(cell===before)matches++;
+            if(matches&&confirm('시간표의 '+matches+'개 셀에도 변경된 과목 이름을 반영할까요?')){
+              for(const table of Object.values(state.timetables))for(const day of table)for(let i=0;i<day.length;i++)if(day[i]===before)day[i]=next;
+              renderTimetable();
+            }
+            subject.name=next;save();
+          }
+          refreshSubjectUI();
+        };
+        saveBtn.addEventListener('click',saveEdit);
+        input.addEventListener('keydown',e=>{if(e.key==='Enter')saveEdit();if(e.key==='Escape')refreshSubjectUI();});
+        cancel.addEventListener('click',refreshSubjectUI);
+      });
+      const toggle=document.createElement('button');toggle.type='button';toggle.className='btn sm';
+      toggle.textContent=subject.archived?'복원':'보관';
+      toggle.addEventListener('click',()=>{
+        if(!subject.archived&&state.active?.subject===subject.id){notify('타이머 측정 중인 과목은 보관할 수 없습니다.');return;}
+        if(!subject.archived&&availableSubjects().length===1){notify('최소 한 개의 사용 가능한 과목을 남겨야 합니다.');return;}
+        subject.archived=!subject.archived;
+        if(subject.archived&&state.selectedSubject===subject.id)state.selectedSubject=availableSubjects()[0].id;
+        save();refreshSubjectUI();
+      });
+      actions.append(edit,toggle);row.append(info,actions);target.append(row);
+    }
+    const count=$('subjects-count');if(count)count.textContent=availableSubjects().length+'개 사용 중 / '+state.subjects.length+'개 전체';
+  }
+  function renderAll(){if(!state.profile){showSetup();return;}clearNotice();renderProfile();renderSubjectOptions();renderSubjects();renderClock();renderStudy();renderSchedule();renderTimetable();renderTasks();if(!$('task-date').value)$('task-date').value=dayKey();}
   function timerStart(){if(state.active)return;const now=Date.now();state.active={subject:state.selectedSubject,type:state.selectedType,startedAt:now,intervals:[],segmentStart:now};save();renderClock();renderStudy();}
   function timerTogglePause(){const a=state.active;if(!a)return;const now=Date.now();if(a.segmentStart!=null){a.intervals.push([a.segmentStart,now]);a.segmentStart=null;}else a.segmentStart=now;save();renderClock();renderStudy();}
   function timerFinish(){const a=state.active;if(!a)return;const now=Date.now();const intervals=sessionIntervals(a,now).filter(([start,end])=>end>start);if(intervals.length){state.sessions.push({subject:a.subject,type:a.type,startedAt:a.startedAt,endedAt:now,intervals});state.sessions=state.sessions.slice(-10000);}state.active=null;save();renderClock();renderStudy();}
@@ -122,6 +258,16 @@ if(typeof document!=='undefined'){
   $('quick-profile').addEventListener('click',()=>openTab('settings'));
   $('setup-form').addEventListener('submit',e=>{e.preventDefault();const f=new FormData(e.currentTarget);setupProfile(String(f.get('grade')),String(f.get('track')));});
   $('profile-form').addEventListener('submit',e=>{e.preventDefault();setupProfile($('settings-grade').value,$('settings-track').value);notify('프로필을 저장했어요. 기존 시간표와 기록은 그대로 유지됩니다.');});
+  $('subject-add-form').addEventListener('submit',e=>{
+    e.preventDefault();const input=$('new-subject-name'),name=input.value.trim();
+    if(!name){notify('과목 이름을 입력하세요.');return;}
+    if(state.subjects.length>=200){notify('과목은 최대 200개까지 등록할 수 있습니다.');return;}
+    if(state.subjects.some(x=>x.name.toLowerCase()===name.toLowerCase())){notify('이미 등록된 과목 이름입니다.');return;}
+    const id='subject-'+safeId();state.subjects.push({id,name,archived:false});
+    state.selectedSubject=id;input.value='';save();refreshSubjectUI();
+    notify(name+' 과목을 추가했습니다.');
+  });
+  $('manage-subjects').addEventListener('click',()=>{openTab('settings');$('subject-manager').scrollIntoView({block:'start',behavior:'smooth'});});
   $('subject-select').addEventListener('change',e=>{state.selectedSubject=e.target.value;save();renderClock();});
   $('type-select').addEventListener('change',e=>{state.selectedType=e.target.value;save();});
   $('timer-start').addEventListener('click',timerStart);

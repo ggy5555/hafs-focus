@@ -1,0 +1,46 @@
+name: HAFS Focus checks
+on:
+  pull_request:
+    paths:
+      - 'app.js'
+      - 'index.html'
+      - 'styles.css'
+      - 'tests/**'
+      - '.github/workflows/ci.yml'
+  push:
+    branches:
+      - 'feat/study-os-redesign'
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: JavaScript syntax
+        run: node --check app.js
+      - name: Node smoke tests
+        run: node --test tests/*.test.cjs
+  browser:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install test-only browser
+        run: |
+          npm install --no-save playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Responsive and offline browser smoke tests
+        run: |
+          python3 -m http.server 8000 --bind 127.0.0.1 >/tmp/hafs-http.log 2>&1 &
+          server_pid=$!
+          trap 'kill $server_pid' EXIT
+          sleep 2
+          node tests/browser-check.cjs
